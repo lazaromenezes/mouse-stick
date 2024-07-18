@@ -1,59 +1,57 @@
 #include "math.h"
+#include "Mouse.h"
 
-#define UP 23
-#define LEFT 22
-#define DOWN 21
-#define RIGHT 19
+#define X_AXIS A0
+#define Y_AXIS A1
 
-#define X_AXIS 39
-#define Y_AXIS 34
+#define MOUSE_GRAB_LIGHT 5
+#define MOUSE_GRAB_TOGGLE 4
 
-const int MAX_VALUE = 4095;
-const int STEP_COUNT = 9;
-
-const int LED_COUNT = 4;
-const int pins[] = {RIGHT, DOWN, LEFT, UP};
-const int STEP_AMOUNT = 63; // 255 / 3
+const int MAX_VALUE = 1023;
+const int STEP_COUNT = 7;
+const int MOUSE_RESPONSE_DELAY = 2;
 
 int midStep = 0;
 
-void setup() {
-  for(int i = 0; i < LED_COUNT; i++)
-    pinMode(pins[i], OUTPUT);
+bool mouseControlEnabled = false;
+bool previousToggleState = false;
 
+void setup() {
   pinMode(X_AXIS, INPUT);
   pinMode(Y_AXIS, INPUT);
+  pinMode(MOUSE_GRAB_TOGGLE, INPUT_PULLUP);
+
+  pinMode(MOUSE_GRAB_LIGHT, OUTPUT);
 
   midStep = ceil(STEP_COUNT / 2.0);
+
+  Mouse.begin();
 }
 
 void loop() {
   Serial.begin(115200);
 
-  int x_read = analogRead(X_AXIS);
-  int y_read = analogRead(Y_AXIS);
-  int x_step = stepFromValue(x_read);
-  int y_step = stepFromValue(y_read);
+  bool control_toggle = digitalRead(MOUSE_GRAB_TOGGLE);
 
-  Serial.printf("X read: %d step: %d | Y read: %d step: %d\n", x_read, x_step, y_read, y_step);
-
-  if(x_step < 0)
-    analogWrite(LEFT, x_step * -1 * STEP_AMOUNT);
-  else if(x_step > 0)
-    analogWrite(RIGHT, x_step * STEP_AMOUNT);
-  else {
-    analogWrite(LEFT, LOW);
-    analogWrite(RIGHT, LOW);
+  if(control_toggle != previousToggleState){
+    if(control_toggle == LOW){
+      mouseControlEnabled = !mouseControlEnabled;
+      digitalWrite(MOUSE_GRAB_LIGHT, mouseControlEnabled ? HIGH : LOW);
+    }
   }
 
-  if(y_step < 0)
-    analogWrite(DOWN, y_step * -1 * STEP_AMOUNT);
-  else if(y_step > 0)
-    analogWrite(UP, y_step * STEP_AMOUNT);
-  else {
-    analogWrite(UP, LOW);
-    analogWrite(DOWN, LOW);
+  previousToggleState = control_toggle;
+
+  if(mouseControlEnabled){
+    int x_read = analogRead(X_AXIS);
+    int y_read = analogRead(Y_AXIS);
+    int x_step = stepFromValue(x_read);
+    int y_step = stepFromValue(y_read);
+    _serial_print_readings(x_read, y_read, x_step, y_step);
+    Mouse.move(x_step, y_step);
   }
+
+  delay(MOUSE_RESPONSE_DELAY);
 }
 
 int stepFromValue(int value) {
@@ -68,4 +66,16 @@ int stepFromValue(int value) {
     int step = ceil(STEP_COUNT * proportion);
 
     return step - midStep;
+}
+
+void _serial_print_readings(int xr, int yr, int xs, int ys){
+  Serial.print("X read: ");
+  Serial.print(xr);
+  Serial.print(" Y read: ");
+  Serial.print(yr);
+  Serial.print(" X step: ");
+  Serial.print(xs);
+  Serial.print(" Y step: ");
+  Serial.print(ys);
+  Serial.println("");
 }
